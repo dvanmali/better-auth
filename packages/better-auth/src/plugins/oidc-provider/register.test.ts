@@ -267,7 +267,7 @@ describe("oidc - /register", async (it) => {
 	});
 })
 
-describe("oidc - unauthenticated", async (it) => {
+describe("oidc - /register unauthenticated", async (it) => {
   const baseUrl = "http://localhost:3000"
 	const {
 		customFetchImpl,
