@@ -22,14 +22,6 @@ describe("oidc - /register", async (it) => {
 			oidcProvider({
 				loginPage: "/login",
         allowDynamicClientRegistration: true,
-				consentPage: "/oauth2/authorize",
-				requirePKCE: true,
-				getAdditionalUserInfoClaim(user, scopes) {
-					return {
-						custom: "custom value",
-						userId: user.id,
-					};
-				},
 			}),
 		],
 	});
