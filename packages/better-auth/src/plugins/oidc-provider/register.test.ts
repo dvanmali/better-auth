@@ -4,15 +4,12 @@ import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from "../jwt";
 import { oidcClient } from "./client";
-import app from "../../../../../dev/cloudflare/src";
 
 describe("oidc - /register", async (it) => {
   const baseUrl = "http://localhost:3000"
 	const {
-		auth: authorizationServer,
 		signInWithTestUser,
 		customFetchImpl,
-		testUser,
 	} = await getTestInstance({
 		baseURL: baseUrl,
 		plugins: [
@@ -273,7 +270,6 @@ describe("oidc - /register", async (it) => {
 describe("oidc - unauthenticated", async (it) => {
   const baseUrl = "http://localhost:3000"
 	const {
-		auth: authorizationServer,
 		customFetchImpl,
 	} = await getTestInstance({
 		baseURL: baseUrl,
