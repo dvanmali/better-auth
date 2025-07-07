@@ -155,7 +155,6 @@ describe("jwt - remote signing", async (it) => {
 						return '123'
 					},
 				},
-				usesOidcProviderPlugin: true,
 			})],
 			logger: {
 				level: "error",
@@ -163,7 +162,6 @@ describe("jwt - remote signing", async (it) => {
 		})).toThrow()
 	});
 });
-
 
 describe("jwt - oidc plugin", async (it) => {
 	const { auth, signInWithTestUser } = await getTestInstance({
@@ -221,7 +219,10 @@ describe("jwt - oidc plugin with remote url", async (it) => {
 		plugins: [jwt({
 			usesOidcProviderPlugin: true,
 			jwks: {
-				remoteUrl: 'https://example.com'
+				remoteUrl: 'https://example.com',
+				keyPairConfig: {
+					alg: 'ES256',
+				},
 			}
 		})],
 		logger: {
@@ -239,6 +240,20 @@ describe("jwt - oidc plugin with remote url", async (it) => {
 			},
 		},
 	});
+
+	it("should require specifying the alg used", async () => {
+		expect(() => getTestInstance({
+			plugins: [jwt({
+				usesOidcProviderPlugin: true,
+				jwks: {
+					remoteUrl: 'https://example.com',
+				},
+			})],
+			logger: {
+				level: "error",
+			},
+		})).toThrow()
+	})
 
 	it("should disable /jwks", async () => {
 		const response = await client.$fetch<JSONWebKeySet>('/jwks')

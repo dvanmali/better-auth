@@ -325,6 +325,20 @@ jwt({
 })
 ```
 
+NOTE: If you are also using the OIDC plugin, you must specify which algorithm is used in signing as well.
+
+```ts title="auth.ts"
+jwt({
+  usesOidcProviderPlugin: true,
+  jwks: {
+    remoteUrl: "https://example.com/.well-known/jwks.json",
+    keyPairConfig: {
+      alg: 'ES256',
+    },
+  },
+})
+```
+
 ### Custom Signing
 
 This is an advanced feature used if you are using a remote Key Management Service such as Google KMS, Amazon KMS, or Azure Key Vault.

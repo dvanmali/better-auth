@@ -246,6 +246,15 @@ export const jwt = (options?: JwtPluginOptions) => {
 		throw new Error("jwks.remoteUrl must be set when using jwt.sign")
 	}
 
+	// Alg is required to be specified when using oidc plugin and remote url (needed in openid metadata)
+	if (
+		options?.usesOidcProviderPlugin &&
+		options.jwks?.remoteUrl &&
+		!options.jwks?.keyPairConfig?.alg
+	) {
+		throw new Error("must specify alg when using the oidc plugin and jwks.remoteUrl")
+	}
+
 	// Disables endpoint if using remote url strategy
 	if (!options?.jwks?.remoteUrl) {
 		endpoints.getJwks = createAuthEndpoint(
