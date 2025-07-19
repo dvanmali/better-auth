@@ -357,7 +357,7 @@ jwt({
   jwt: {
     sign: async (jwtPayload: JWTPayload) => {
       // this is pseudocode
-      const headers = { kid: '123', alg: 'ES256', typ: 'JWT' }
+      const headers = JSON.stringify({ kid: '123', alg: 'ES256', typ: 'JWT' })
       const payload = JSON.stringify(jwtPayload)
       const encodedHeaders = Buffer.from(headers).toString('base64url')
       const encodedPayload = Buffer.from(payload).toString('base64url')
