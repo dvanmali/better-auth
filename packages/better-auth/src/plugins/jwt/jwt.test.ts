@@ -187,17 +187,19 @@ describe("jwt", async (it) => {
 					: "";
 
 				it(`${alg} algorithm${enc} can be used to generate JWKS`, async () => {
-					const jwks = await auth.api.getJwks();
+					const jwkResponse = await client.$fetch<JSONWebKeySet>("/jwks");
+					const jwks = jwkResponse?.data ?? undefined;
+					expect(jwks).toBeDefined();
 
-					expect(jwks.keys.at(0)?.kty).toBe(expectedOutcome.ec);
-					if (jwks.keys.at(0)?.crv)
-						expect(jwks.keys.at(0)?.crv).toBe(expectedOutcome.crv);
-					expect(jwks.keys.at(0)?.alg).toBe(expectedOutcome.alg);
-					if (jwks.keys.at(0)?.x)
-						expect(jwks.keys.at(0)?.x).toHaveLength(expectedOutcome.length);
-					if (jwks.keys.at(0)?.y)
-						expect(jwks.keys.at(0)?.y).toHaveLength(expectedOutcome.length);
-					if (jwks.keys.at(0)?.n)
+					expect(jwks?.keys.at(0)?.kty).toBe(expectedOutcome.ec);
+					if (jwks?.keys.at(0)?.crv)
+						expect(jwks?.keys.at(0)?.crv).toBe(expectedOutcome.crv);
+					expect(jwks?.keys.at(0)?.alg).toBe(expectedOutcome.alg);
+					if (jwks?.keys.at(0)?.x)
+						expect(jwks?.keys.at(0)?.x).toHaveLength(expectedOutcome.length);
+					if (jwks?.keys.at(0)?.y)
+						expect(jwks?.keys.at(0)?.y).toHaveLength(expectedOutcome.length);
+					if (jwks?.keys.at(0)?.n)
 						expect(jwks?.keys.at(0)?.n).toHaveLength(expectedOutcome.length);
 				});
 
