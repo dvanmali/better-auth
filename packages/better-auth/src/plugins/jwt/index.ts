@@ -10,7 +10,7 @@ import type {
 import { schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
 import { createJwk, signJwt as signJwtInternal } from "./sign";
-import type { JWTPayload } from "jose";
+import { type JWTPayload } from "jose";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -18,7 +18,6 @@ import {
 } from "../../api";
 import { mergeSchema } from "../../db/schema";
 import { BetterAuthError } from "../../error";
-import type { Awaitable } from "../../types/helper";
 
 // Asymmetric (JWS) Supported (https://github.com/panva/jose/issues/210)
 export type JWKOptions =
@@ -98,7 +97,7 @@ export interface JwtOptions {
 	 * @requires jwks.remoteUrl
 	 * @invalidates other jwt.* options
 	 */
-	sign?: (payload: JWTPayload) => Awaitable<string>;
+	sign?: (payload: JWTPayload) => Promise<string> | string;
 	/**
 	 * The issuer of the JWT
 	 */

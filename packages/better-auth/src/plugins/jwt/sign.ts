@@ -1,12 +1,12 @@
 import {
-	importJWK,
 	exportJWK,
 	generateKeyPair,
+	importJWK,
 	SignJWT,
 	type JWK,
 	type JWTPayload,
 } from "jose";
-import type { GenericEndpointContext } from "../../types";
+import { type GenericEndpointContext } from "../../types";
 import { BetterAuthError } from "../../error";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getJwtPlugin, type JwtPluginOptions } from ".";
@@ -33,6 +33,13 @@ export async function generateExportedKeyPair(
 	return { publicWebKey, privateWebKey };
 }
 
+/**
+ * Signs a payload in jwt format
+ *
+ * @param ctx - endpoint context
+ * @param payload - payload to sign
+ * @param options - Jwt signing options. If not provided, uses the jwtPlugin options
+ */
 export async function signJwt(
 	ctx: GenericEndpointContext,
 	payload: JWTPayload,
@@ -86,7 +93,6 @@ export async function signJwt(
 		.setAudience(
 			payload.aud ?? options?.jwt?.audience ?? ctx.context.options.baseURL!,
 		)
-		.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
 		.setExpirationTime(payload.exp ?? options?.jwt?.expirationTime ?? "15m");
 	const sub =
 		(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
