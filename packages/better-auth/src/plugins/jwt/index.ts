@@ -410,4 +410,3 @@ export async function signJwt(
 ): Promise<string> {
 	return await signJwt_internal(ctx, payload, options);
 }
-

@@ -3,9 +3,9 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { createAuthClient } from "../../client";
 import { jwtClient } from "./client";
 import { jwt } from "./index";
-import { generateExportedKeyPair } from "./sign";
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
 import type { JWKOptions, JwtPluginOptions } from ".";
+import { generateExportedKeyPair } from "./sign";
 
 describe("jwt", async (it) => {
 	// Testing the default behaviour
@@ -166,7 +166,7 @@ describe("jwt", async (it) => {
 					keyPairConfig: {
 						...algorithm.keyPairConfig,
 					},
-					disablePrivateKeyEncryption,
+					disablePrivateKeyEncryption: disablePrivateKeyEncryption,
 				},
 			};
 			try {
@@ -213,6 +213,7 @@ describe("jwt", async (it) => {
 					if (jwks?.keys.at(0)?.n)
 						expect(jwks?.keys.at(0)?.n).toHaveLength(expectedOutcome.length);
 				});
+
 				const client = createAuthClient({
 					plugins: [jwtClient()],
 					baseURL: "http://localhost:3000/api/auth",
