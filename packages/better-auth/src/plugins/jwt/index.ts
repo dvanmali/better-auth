@@ -9,8 +9,8 @@ import type {
 } from "../../types";
 import { schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
-import { createJwk, signJwt as signJwtInternal } from "./sign";
-import { type JWTPayload } from "jose";
+import { createJwk, signJwt as signJwt_internal } from "./sign";
+import type { JWTPayload } from "jose";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -18,6 +18,7 @@ import {
 } from "../../api";
 import { mergeSchema } from "../../db/schema";
 import { BetterAuthError } from "../../error";
+import type { Awaitable } from "../../types/helper";
 
 // Asymmetric (JWS) Supported (https://github.com/panva/jose/issues/210)
 export type JWKOptions =
@@ -97,7 +98,7 @@ export interface JwtOptions {
 	 * @requires jwks.remoteUrl
 	 * @invalidates other jwt.* options
 	 */
-	sign?: (payload: JWTPayload) => Promise<string> | string;
+	sign?: (payload: JWTPayload) => Awaitable<string>;
 	/**
 	 * The issuer of the JWT
 	 */
@@ -336,7 +337,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 				}
 
 				// Convert into JWT token
-				const jwt = await signJwt(ctx, payload, options);
+				const jwt = await signJwt_internal(ctx, payload, options);
 				return ctx.json({
 					token: jwt,
 				});
@@ -365,7 +366,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 					}
 
 					if (!payload) return;
-					const jwt = await signJwt(ctx, payload, options);
+					const jwt = await signJwt_internal(ctx, payload, options);
 					const exposedHeaders =
 						ctx.context.responseHeaders?.get("access-control-expose-headers") ||
 						"";
@@ -407,5 +408,6 @@ export async function signJwt(
 	payload: JWTPayload,
 	options?: JwtPluginOptions,
 ): Promise<string> {
-	return await signJwtInternal(ctx, payload, options);
+	return await signJwt_internal(ctx, payload, options);
 }
+

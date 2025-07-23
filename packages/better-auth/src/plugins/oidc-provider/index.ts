@@ -814,7 +814,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 									audience: client_id.toString(),
 									issuer: ctx.context.options.baseURL,
 									expirationTime,
-									definePayload: () => payload,
 								},
 							},
 						);

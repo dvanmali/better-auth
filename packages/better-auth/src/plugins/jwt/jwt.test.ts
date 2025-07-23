@@ -187,6 +187,17 @@ describe("jwt", async (it) => {
 					: "";
 
 				it(`${alg} algorithm${enc} can be used to generate JWKS`, async () => {
+					// Unit Test
+					const { publicWebKey, privateWebKey } =
+						await generateExportedKeyPair(jwtOptions);
+					for (const key of [publicWebKey, privateWebKey]) {
+						expect(key.kty).toBe(expectedOutcome.ec);
+						if (key.x) expect(key.x).toHaveLength(expectedOutcome.length);
+						if (key.y) expect(key.y).toHaveLength(expectedOutcome.length);
+						if (key.n) expect(key.n).toHaveLength(expectedOutcome.length);
+					}
+
+					// Functional Test
 					const jwkResponse = await client.$fetch<JSONWebKeySet>("/jwks");
 					const jwks = jwkResponse?.data ?? undefined;
 					expect(jwks).toBeDefined();
@@ -201,17 +212,6 @@ describe("jwt", async (it) => {
 						expect(jwks?.keys.at(0)?.y).toHaveLength(expectedOutcome.length);
 					if (jwks?.keys.at(0)?.n)
 						expect(jwks?.keys.at(0)?.n).toHaveLength(expectedOutcome.length);
-				});
-
-				it(`${alg} algorithm${enc}: Endpoint "/token" can extract valid keys`, async () => {
-					const { publicWebKey, privateWebKey } =
-						await generateExportedKeyPair(jwtOptions);
-					for (const key of [publicWebKey, privateWebKey]) {
-						expect(key.kty).toBe(expectedOutcome.ec);
-						if (key.x) expect(key.x).toHaveLength(expectedOutcome.length);
-						if (key.y) expect(key.y).toHaveLength(expectedOutcome.length);
-						if (key.n) expect(key.n).toHaveLength(expectedOutcome.length);
-					}
 				});
 				const client = createAuthClient({
 					plugins: [jwtClient()],

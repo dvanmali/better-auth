@@ -1,37 +1,16 @@
 import {
+	importJWK,
 	exportJWK,
 	generateKeyPair,
-	importJWK,
 	SignJWT,
-	type JWK,
 	type JWTPayload,
 } from "jose";
-import { type GenericEndpointContext } from "../../types";
+import type { GenericEndpointContext } from "../../types";
 import { BetterAuthError } from "../../error";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getJwtPlugin, type JwtPluginOptions } from ".";
 import type { Jwk } from "./schema";
 import { getJwksAdapter } from "./adapter";
-
-export async function generateExportedKeyPair(
-	options?: JwtPluginOptions,
-): Promise<{ publicWebKey: JWK; privateWebKey: JWK }> {
-	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
-		alg: "EdDSA",
-		crv: "Ed25519",
-	};
-	const keyPairConfig = {
-		extractable: true,
-		...cfg,
-	};
-
-	const { publicKey, privateKey } = await generateKeyPair(alg, keyPairConfig);
-
-	const publicWebKey = await exportJWK(publicKey);
-	const privateWebKey = await exportJWK(privateKey);
-
-	return { publicWebKey, privateWebKey };
-}
 
 /**
  * Signs a payload in jwt format
@@ -93,6 +72,7 @@ export async function signJwt(
 		.setAudience(
 			payload.aud ?? options?.jwt?.audience ?? ctx.context.options.baseURL!,
 		)
+		.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
 		.setExpirationTime(payload.exp ?? options?.jwt?.expirationTime ?? "15m");
 	const sub =
 		(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
@@ -100,6 +80,21 @@ export async function signJwt(
 		ctx.context.session?.user.id;
 	if (sub) jwt.setSubject(sub);
 	return await jwt.sign(privateKey);
+}
+
+export async function generateExportedKeyPair(options?: JwtPluginOptions) {
+	const { publicKey, privateKey } = await generateKeyPair(
+		options?.jwks?.keyPairConfig?.alg ?? "EdDSA",
+		{
+			...options?.jwks?.keyPairConfig,
+			extractable: true,
+		},
+	);
+
+	const publicWebKey = await exportJWK(publicKey);
+	const privateWebKey = await exportJWK(privateKey);
+
+	return { publicWebKey, privateWebKey };
 }
 
 /**
@@ -115,7 +110,6 @@ export async function createJwk(
 
 	const { publicWebKey, privateWebKey } =
 		await generateExportedKeyPair(options);
-
 	const stringifiedPrivateWebKey = JSON.stringify(privateWebKey);
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
