@@ -1,7 +1,6 @@
 import type {
 	AuthContext,
 	BetterAuthPlugin,
-	GenericEndpointContext,
 	HookEndpointContext,
 	InferOptionSchema,
 	Session,
@@ -9,7 +8,7 @@ import type {
 } from "../../types";
 import { schema } from "./schema";
 import { getJwksAdapter } from "./adapter";
-import { createJwk, signJwt as signJwt_internal } from "./sign";
+import { createJwk, signJwt } from "./sign";
 import type { JWTPayload } from "jose";
 import {
 	createAuthEndpoint,
@@ -19,6 +18,7 @@ import {
 import { mergeSchema } from "../../db/schema";
 import { BetterAuthError } from "../../error";
 import type { Awaitable } from "../../types/helper";
+export * from "./sign";
 
 // Asymmetric (JWS) Supported (https://github.com/panva/jose/issues/210)
 export type JWKOptions =
@@ -337,7 +337,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 				}
 
 				// Convert into JWT token
-				const jwt = await signJwt_internal(ctx, payload, options);
+				const jwt = await signJwt(ctx, payload, options);
 				return ctx.json({
 					token: jwt,
 				});
@@ -366,7 +366,7 @@ export const jwt = (options?: JwtPluginOptions) => {
 					}
 
 					if (!payload) return;
-					const jwt = await signJwt_internal(ctx, payload, options);
+					const jwt = await signJwt(ctx, payload, options);
 					const exposedHeaders =
 						ctx.context.responseHeaders?.get("access-control-expose-headers") ||
 						"";
@@ -402,11 +402,3 @@ export const jwt = (options?: JwtPluginOptions) => {
 		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };
-
-export async function signJwt(
-	ctx: GenericEndpointContext,
-	payload: JWTPayload,
-	options?: JwtPluginOptions,
-): Promise<string> {
-	return await signJwt_internal(ctx, payload, options);
-}
