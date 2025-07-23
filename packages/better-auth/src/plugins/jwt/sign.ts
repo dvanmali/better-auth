@@ -72,7 +72,6 @@ export async function signJwt(
 		.setAudience(
 			payload.aud ?? options?.jwt?.audience ?? ctx.context.options.baseURL!,
 		)
-		.setAudience(options?.jwt?.audience ?? ctx.context.options.baseURL!)
 		.setExpirationTime(payload.exp ?? options?.jwt?.expirationTime ?? "15m");
 	const sub =
 		(await options?.jwt?.getSubject?.(ctx.context.session!)) ??
