@@ -127,7 +127,7 @@ describe("oauth", async () => {
 		);
 
 		const { headers } = await signInWithTestUser();
-		const response = await authorizationServer.api.registerOAuthClient({
+		const response = await authorizationServer.api.createOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -390,7 +390,7 @@ describe("oauth - prompt", async () => {
 			},
 		);
 
-		const response = await authorizationServer.api.registerOAuthClient({
+		const response = await authorizationServer.api.createOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -804,7 +804,7 @@ describe("oauth - config", () => {
 				port,
 			});
 
-			const createdClient = await authorizationServer.api.registerOAuthClient({
+			const createdClient = await authorizationServer.api.createOAuthClient({
 				headers,
 				body: {
 					redirect_uris: [redirectUri],
@@ -907,7 +907,7 @@ describe("oauth - config", () => {
 				port,
 			});
 
-			const createdClient = await authorizationServer.api.registerOAuthClient({
+			const createdClient = await authorizationServer.api.createOAuthClient({
 				headers,
 				body: {
 					redirect_uris: [redirectUri],
@@ -1024,7 +1024,7 @@ describe("oauth - config", () => {
 				port,
 			});
 
-			const createdClient = await authorizationServer.api.registerOAuthClient({
+			const createdClient = await authorizationServer.api.createOAuthClient({
 				headers,
 				body: {
 					redirect_uris: [redirectUri],

@@ -113,10 +113,10 @@ Please report any issues or bugs on [GitHub](https://github.com/better-auth/bett
   <Step>
     ### Create your first client
 
-    Register your first confidential client.
+    Create your first confidential client.
 
     ```ts
-    const client = await auth.api.registerOAuthClient({
+    const client = await auth.api.createOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],

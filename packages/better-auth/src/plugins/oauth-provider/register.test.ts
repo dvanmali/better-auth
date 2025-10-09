@@ -76,7 +76,7 @@ describe("oauth register", async () => {
 	});
 
 	it("should register private client with minimum requirements via server", async () => {
-		const response = await auth.api.registerOAuthClient({
+		const response = await auth.api.createOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
@@ -120,7 +120,7 @@ describe("oauth register", async () => {
 	it.each(["native", "user-agent-based"] as OAuthClient["type"][])(
 		"should register public '%s' client with minimum requirements via server",
 		async (type) => {
-			const response = await auth.api.registerOAuthClient({
+			const response = await auth.api.createOAuthClient({
 				headers,
 				body: {
 					token_endpoint_auth_method: "none",

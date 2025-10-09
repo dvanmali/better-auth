@@ -6,7 +6,7 @@ import { generateRandomString } from "../../crypto";
 import { storeClientSecret } from "./utils";
 import { toExpJWT } from "../jwt/utils";
 
-export async function dynamicRegisterEndpoint(
+export async function registerEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions,
 ) {
@@ -18,6 +18,7 @@ export async function dynamicRegisterEndpoint(
 		});
 	}
 
+	const body = ctx.body as OAuthClient;
 	const session = await getSessionFromCtx(ctx);
 
 	// Check authorization
@@ -27,16 +28,6 @@ export async function dynamicRegisterEndpoint(
 			error_description: "Authentication required for client registration",
 		});
 	}
-
-	return registerOAuthClient(ctx, opts);
-}
-
-export async function registerOAuthClient(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
-) {
-	const body = ctx.body as OAuthClient;
-	const session = await getSessionFromCtx(ctx);
 
 	// Determine whether registration request for public client
 	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
@@ -51,17 +42,28 @@ export async function registerOAuthClient(
 		});
 	}
 
+	return createOAuthClientEndpoint(ctx, opts);
+}
+
+export async function checkOAuthClient(
+	client: OAuthClient,
+	opts: OAuthOptions,
+) {
+	// Determine whether registration request for public client
+	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
+	const isPublic = client.token_endpoint_auth_method === "none";
+
 	// Check value of type, if sent, matches isPublic
-	if (body.type) {
+	if (client.type) {
 		if (
 			isPublic &&
-			!(body.type === "native" || body.type === "user-agent-based")
+			!(client.type === "native" || client.type === "user-agent-based")
 		) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description: `Type must be 'native' or 'user-agent-based' for public applications`,
 			});
-		} else if (!isPublic && !(body.type === "web")) {
+		} else if (!isPublic && !(client.type === "web")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description: `Type must be 'web' for confidential applications`,
@@ -71,8 +73,9 @@ export async function registerOAuthClient(
 
 	// Validate redirect URIs for redirect-based flows
 	if (
-		(!body.grant_types || body.grant_types.includes("authorization_code")) &&
-		(!body.redirect_uris || body.redirect_uris.length === 0)
+		(!client.grant_types ||
+			client.grant_types.includes("authorization_code")) &&
+		(!client.redirect_uris || client.redirect_uris.length === 0)
 	) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_redirect_uri",
@@ -82,8 +85,8 @@ export async function registerOAuthClient(
 	}
 
 	// Validate correlation between grant_types and response_types
-	const grantTypes = body.grant_types ?? ["authorization_code"];
-	const responseTypes = body.response_types ?? ["code"];
+	const grantTypes = client.grant_types ?? ["authorization_code"];
+	const responseTypes = client.response_types ?? ["code"];
 	if (
 		grantTypes.includes("authorization_code") &&
 		!responseTypes.includes("code")
@@ -95,18 +98,8 @@ export async function registerOAuthClient(
 		});
 	}
 
-	// Generate clientId and clientSecret based on its type
-	const clientId =
-		opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
-	const clientSecret = isPublic
-		? undefined
-		: opts.generateClientSecret?.() || generateRandomString(32, "a-z", "A-Z");
-	const storedClientSecret = clientSecret
-		? await storeClientSecret(ctx, opts, clientSecret)
-		: undefined;
-
 	// Check requested application scopes
-	const requestedScopes = (body?.scope as string | undefined)
+	const requestedScopes = (client?.scope as string | undefined)
 		?.split(" ")
 		.filter((v) => v.length);
 	const allowedScopes = opts.clientRegistrationAllowedScopes ?? opts.scopes;
@@ -120,6 +113,31 @@ export async function registerOAuthClient(
 			}
 		}
 	}
+}
+
+export async function createOAuthClientEndpoint(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions,
+) {
+	const body = ctx.body as OAuthClient;
+	const session = await getSessionFromCtx(ctx);
+
+	// Determine whether registration request for public client
+	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
+	const isPublic = body.token_endpoint_auth_method === "none";
+
+	// Check if client parameters are valid combination
+	await checkOAuthClient(ctx.body, opts);
+
+	// Generate clientId and clientSecret based on its type
+	const clientId =
+		opts.generateClientId?.() || generateRandomString(32, "a-z", "A-Z");
+	const clientSecret = isPublic
+		? undefined
+		: opts.generateClientSecret?.() || generateRandomString(32, "a-z", "A-Z");
+	const storedClientSecret = clientSecret
+		? await storeClientSecret(ctx, opts, clientSecret)
+		: undefined;
 
 	// Create the client with the existing schema
 	const iat = Math.floor(Date.now() / 1000);
@@ -379,6 +397,8 @@ export function schemaToOAuth(
 	const rest = metadata ? JSON.parse(metadata) : undefined;
 
 	return {
+		// All other metadata
+		...(cleaned ? undefined : rest),
 		// Important Fields
 		client_id: clientId,
 		client_secret: clientSecret,
@@ -412,7 +432,5 @@ export function schemaToOAuth(
 		// Not Part of RFC7591 Spec
 		disabled,
 		skip_consent: skipConsent,
-		// All other metadata
-		...(cleaned ? undefined : rest),
 	};
 }

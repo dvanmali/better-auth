@@ -31,7 +31,7 @@ describe("mcp", async () => {
 	let oauthClient: OAuthClient | null;
 
 	beforeAll(async () => {
-		const response = await auth.api.registerOAuthClient({
+		const response = await auth.api.createOAuthClient({
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
