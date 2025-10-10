@@ -8,6 +8,23 @@ export type StoreTokenType =
 	| "refresh_token"
 	| "authorization_code";
 
+/**
+ * Context passed to customJwtClaims and customIdTokenClaims callbacks.
+ * Provides additional information about the OAuth flow.
+ */
+export interface CustomJwtClaimsContext {
+	/**
+	 * The session ID associated with this OAuth authorization flow.
+	 * Available for authorization_code and refresh_token grants.
+	 * Undefined for client_credentials grant (M2M tokens have no user session).
+	 */
+	sessionId?: string;
+	/**
+	 * The client ID making the request
+	 */
+	clientId: string;
+}
+
 export interface OAuthOptions {
 	/**
 	 * Custom schema definitions
@@ -250,6 +267,7 @@ export interface OAuthOptions {
 	customIdTokenClaims?: (
 		user: User,
 		scopes: string[],
+		context?: CustomJwtClaimsContext,
 	) => Awaitable<Record<string, any>>;
 	/**
 	 * Custom claims attached to access tokens.
@@ -257,6 +275,7 @@ export interface OAuthOptions {
 	customJwtClaims?: (
 		user: User,
 		scopes: string[],
+		context?: CustomJwtClaimsContext,
 	) => Awaitable<Record<string, any>>;
 	/**
 	 * Overwrite specific /.well-known/openid-configuration

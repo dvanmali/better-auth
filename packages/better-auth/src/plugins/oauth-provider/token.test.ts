@@ -1326,3 +1326,515 @@ describe("oauth token - config", async () => {
 		expect(tokens.data?.access_token).toBeDefined();
 	});
 });
+
+describe("oauth token - customJwtClaims with context", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const validAudience = "https://myapi.example.com";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "123";
+
+	// Track calls to customJwtClaims
+	const customJwtClaimsCallHistory: Array<{
+		sessionId?: string;
+		clientId: string;
+	}> = [];
+
+	const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					audience: validAudience,
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				customJwtClaims: async (user, scopes, context) => {
+					if (context) {
+						customJwtClaimsCallHistory.push({
+							sessionId: context.sessionId,
+							clientId: context.clientId,
+						});
+					}
+					return {
+						custom_claim: "test_value",
+					};
+				},
+				customClaims: ["custom_claim"],
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	let jwks: ReturnType<typeof createLocalJWKSet>;
+
+	beforeAll(async () => {
+		const registeredClient = await auth.api.createOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		oauthClient = registeredClient;
+
+		const jwksResult = await client.jwks();
+		if (!jwksResult.data) {
+			throw new Error("Unable to fetch jwks");
+		}
+		jwks = createLocalJWKSet(jwksResult.data);
+	});
+
+	async function createAuthUrl(
+		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
+	) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: redirectUri,
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid", "profile", "offline_access"],
+			codeVerifier,
+			...overrides,
+		});
+		return {
+			url,
+			codeVerifier,
+		};
+	}
+
+	it("should pass sessionId to customJwtClaims during authorization_code flow", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		customJwtClaimsCallHistory.length = 0; // Clear history
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl();
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const url = new URL(callbackRedirectUrl);
+		const code = url.searchParams.get("code")!;
+
+		const tokens = await client.oauth2.token({
+			code,
+			code_verifier: codeVerifier,
+			grant_type: "authorization_code",
+			resource: validAudience,
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+			redirect_uri: redirectUri,
+		});
+
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(customJwtClaimsCallHistory.length).toBeGreaterThan(0);
+
+		const lastCall =
+			customJwtClaimsCallHistory[customJwtClaimsCallHistory.length - 1];
+		expect(lastCall.sessionId).toBeDefined();
+		expect(lastCall.clientId).toBe(oauthClient.client_id);
+
+		// Verify the JWT contains the custom claim
+		const accessToken = await jwtVerify(tokens.data?.access_token!, jwks, {
+			audience: validAudience,
+			issuer: authServerBaseUrl,
+		});
+		expect(accessToken.payload.custom_claim).toBe("test_value");
+	});
+
+	it("should pass the SAME sessionId during refresh_token flow", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		customJwtClaimsCallHistory.length = 0; // Clear history
+
+		// Initial authorization
+		const { url: authUrl, codeVerifier } = await createAuthUrl();
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const url = new URL(callbackRedirectUrl);
+		const code = url.searchParams.get("code")!;
+
+		const tokens = await client.oauth2.token({
+			code,
+			code_verifier: codeVerifier,
+			grant_type: "authorization_code",
+			resource: validAudience,
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+			redirect_uri: redirectUri,
+		});
+
+		expect(customJwtClaimsCallHistory.length).toBeGreaterThan(0);
+		const initialSessionId =
+			customJwtClaimsCallHistory[customJwtClaimsCallHistory.length - 1]
+				.sessionId;
+		expect(initialSessionId).toBeDefined();
+
+		// Refresh token
+		const refreshedTokens = await client.oauth2.token({
+			resource: validAudience,
+			// @ts-expect-error refresh_token is sent
+			refresh_token: tokens.data?.refresh_token,
+			grant_type: "refresh_token",
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+		});
+
+		expect(refreshedTokens.data?.access_token).toBeDefined();
+		expect(customJwtClaimsCallHistory.length).toBeGreaterThan(1);
+
+		const refreshedSessionId =
+			customJwtClaimsCallHistory[customJwtClaimsCallHistory.length - 1]
+				.sessionId;
+		expect(refreshedSessionId).toBe(initialSessionId); // Same session!
+	});
+
+	it("should NOT pass sessionId for client_credentials grant (M2M)", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		customJwtClaimsCallHistory.length = 0; // Clear history
+
+		// Client credentials grant doesn't have session context
+		const tokens = await client.oauth2.token({
+			resource: validAudience,
+			grant_type: "client_credentials",
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+			scope: "openid",
+		});
+
+		// M2M should not call customJwtClaims since there's no user
+		// But if it does for some reason, sessionId should be undefined
+		if (customJwtClaimsCallHistory.length > 0) {
+			const lastCall =
+				customJwtClaimsCallHistory[customJwtClaimsCallHistory.length - 1];
+			expect(lastCall.sessionId).toBeUndefined();
+		}
+	});
+
+	it("should pass correct clientId in context", async ({ expect }) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		customJwtClaimsCallHistory.length = 0; // Clear history
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl();
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const url = new URL(callbackRedirectUrl);
+		const code = url.searchParams.get("code")!;
+
+		await client.oauth2.token({
+			code,
+			code_verifier: codeVerifier,
+			grant_type: "authorization_code",
+			resource: validAudience,
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+			redirect_uri: redirectUri,
+		});
+
+		expect(customJwtClaimsCallHistory.length).toBeGreaterThan(0);
+		const lastCall =
+			customJwtClaimsCallHistory[customJwtClaimsCallHistory.length - 1];
+		expect(lastCall.clientId).toBe(oauthClient.client_id);
+	});
+
+	it("should work with backward-compatible callback (no context param)", async ({
+		expect,
+	}) => {
+		// Create a new instance with old-style callback
+		const {
+			auth: authOld,
+			customFetchImpl: fetchOld,
+			signInWithTestUser: signInOld,
+		} = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({
+					jwt: {
+						audience: validAudience,
+						issuer: authServerBaseUrl,
+					},
+				}),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					// Old-style callback without context parameter
+					customJwtClaims: async (user, scopes) => {
+						return {
+							old_style_claim: "still_works",
+						};
+					},
+					customClaims: ["old_style_claim"],
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+			],
+		});
+
+		const { headers: headersOld } = await signInOld();
+		const clientOld = createAuthClient({
+			plugins: [oauthProviderClient(), jwtClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl: fetchOld,
+				headers: headersOld,
+			},
+		});
+
+		// Get jwks for the new auth instance
+		const jwksResultOld = await clientOld.jwks();
+		if (!jwksResultOld.data) {
+			throw new Error("Unable to fetch jwks");
+		}
+		const jwksOld = createLocalJWKSet(jwksResultOld.data);
+
+		const registeredClientOld = await authOld.api.createOAuthClient({
+			headers: headersOld,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: registeredClientOld.client_id,
+				clientSecret: registeredClientOld.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: redirectUri,
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid", "profile", "offline_access"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await clientOld.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const code = callbackUrl.searchParams.get("code")!;
+
+		const tokens = await clientOld.oauth2.token({
+			code,
+			code_verifier: codeVerifier,
+			grant_type: "authorization_code",
+			resource: validAudience,
+			client_id: registeredClientOld.client_id,
+			client_secret: registeredClientOld.client_secret,
+			redirect_uri: redirectUri,
+		});
+
+		expect(tokens.data?.access_token).toBeDefined();
+
+		// Verify the JWT contains the old-style claim
+		const accessToken = await jwtVerify(tokens.data?.access_token!, jwksOld, {
+			audience: validAudience,
+			issuer: authServerBaseUrl,
+		});
+		expect(accessToken.payload.old_style_claim).toBe("still_works");
+	});
+});
+
+describe("oauth token - customIdTokenClaims with context", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const validAudience = "https://myapi.example.com";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "123";
+
+	// Track calls to customIdTokenClaims
+	const customIdTokenClaimsCallHistory: Array<{
+		sessionId?: string;
+		clientId: string;
+	}> = [];
+
+	const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					audience: validAudience,
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				customIdTokenClaims: async (user, scopes, context) => {
+					if (context) {
+						customIdTokenClaimsCallHistory.push({
+							sessionId: context.sessionId,
+							clientId: context.clientId,
+						});
+					}
+					return {
+						"https://example.com/custom_id_claim": "id_token_value",
+					};
+				},
+				customClaims: ["https://example.com/custom_id_claim"],
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	let jwks: ReturnType<typeof createLocalJWKSet>;
+
+	beforeAll(async () => {
+		const registeredClient = await auth.api.createOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		oauthClient = registeredClient;
+
+		const jwksResult = await client.jwks();
+		if (!jwksResult.data) {
+			throw new Error("Unable to fetch jwks");
+		}
+		jwks = createLocalJWKSet(jwksResult.data);
+	});
+
+	it("should pass sessionId to customIdTokenClaims during authorization_code flow", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		customIdTokenClaimsCallHistory.length = 0; // Clear history
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: redirectUri,
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid", "profile", "offline_access"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const code = callbackUrl.searchParams.get("code")!;
+
+		const tokens = await client.oauth2.token({
+			code,
+			code_verifier: codeVerifier,
+			grant_type: "authorization_code",
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+			redirect_uri: redirectUri,
+		});
+
+		expect(tokens.data?.id_token).toBeDefined();
+		expect(customIdTokenClaimsCallHistory.length).toBeGreaterThan(0);
+
+		const lastCall =
+			customIdTokenClaimsCallHistory[
+				customIdTokenClaimsCallHistory.length - 1
+			];
+		expect(lastCall.sessionId).toBeDefined();
+		expect(lastCall.clientId).toBe(oauthClient.client_id);
+
+		// Verify the ID token contains the custom claim
+		const idToken = await jwtVerify(tokens.data?.id_token!, jwks);
+		expect(
+			(idToken.payload as any)["https://example.com/custom_id_claim"],
+		).toBe("id_token_value");
+	});
+});

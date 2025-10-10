@@ -90,7 +90,10 @@ async function createJwtAccessToken(
 	const expiresIn = opts.accessTokenExpiresIn ?? 3600;
 	const exp = overrides?.exp ?? iat + expiresIn;
 	const customClaims = opts.customJwtClaims
-		? await opts.customJwtClaims(user, scopes)
+		? await opts.customJwtClaims(user, scopes, {
+				sessionId: overrides?.sid,
+				clientId: clientId,
+			})
 		: {};
 
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
@@ -129,6 +132,7 @@ async function createIdToken(
 	clientSecret: string | undefined,
 	scopes: string[],
 	nonce?: string,
+	sessionId?: string,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const expiresIn = 60 * 60 * 10; // 10 hour id token lifetime
@@ -144,7 +148,10 @@ async function createIdToken(
 	const acr = "urn:mace:incommon:iap:bronze";
 
 	const customClaims = opts.customIdTokenClaims
-		? await opts.customIdTokenClaims(user, scopes)
+		? await opts.customIdTokenClaims(user, scopes, {
+				sessionId: sessionId,
+				clientId: clientId,
+			})
 		: {};
 
 	const jwtPluginOptions = opts.disableJwtPlugin
@@ -426,6 +433,7 @@ async function createUserTokens(
 					client.clientSecret,
 					scopes,
 					nonce,
+					sessionId,
 				)
 			: undefined,
 	]);
