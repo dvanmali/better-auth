@@ -959,8 +959,7 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
     import { mcpHandler } from "better-auth/plugins";
     import { z } from "zod";
 
-    const handler = mcpHandler(auth, (req, session) => {
-      // session contains the access token record with scopes and user ID
+    const handler = mcpHandler(auth, (req, jwt) => {
       return createMcpHandler(
         (server) => {
           server.tool(
@@ -969,7 +968,10 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
             { message: z.string() },
             async ({ message }) => {
               return {
-                content: [{ type: "text", text: `Tool echo: ${message}` }],
+                content: [{
+                  type: "text",
+                  text: `User ${jwt.sub}: ${message}`
+                }],
               };
             },
           );
@@ -995,59 +997,25 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
     export { handler as GET, handler as POST, handler as DELETE };
     ```
 
-    - Manually handle Errors
-
-    To manually check for errors, watch for "Unauthorized" responses (status code 401) when using `api.oAuth2introspectVerify` with access to `auth`.
+    - Using the client `verifyAccessToken` function
 
     ```ts
-    import { auth } from "@/lib/auth"; // Location of BetterAuth options
-    import { verifyAccessToken, handleMcpErrors } from "better-auth/plugins";
+    import { authClient } from "./client";
 
-    // this is pseudocode to show how to properly handle errors
     export const GET = async (req: Request) => {
-      const accessToken = req.headers.get('Authorization');
-      try {
-        const tokens = await auth.api.oAuth2introspectVerify();
-        // ...continue
-      } catch (error) {
-        try {
-          return handleMcpErrors(
-            error,
-            "https://api.example.com",
-          );
-        } catch (error) {
-          console.error(error as unknown as string);
-        }
-      }
-    }
-    ```
-
-    Or fully manual when using the `verifyAccessToken` function.
-
-    ```ts
-    import { verifyAccessToken, handleMcpErrors } from "better-auth/plugins";
-
-    // this is pseudocode to show how to properly handle errors
-    export const GET = async (req: Request) => {
-      const accessToken = req.headers.get('Authorization');
-      try {
-        const tokens = await verifyAccessToken(accessToken, {
+      const authorization = req.headers?.get("authorization") ?? undefined;
+      const accessToken = authorization?.startsWith("Bearer ")
+        ? authorization.replace("Bearer ", "")
+        : authorization;
+      const payload = await client.verifyAccessToken(
+        accessToken, {
           verifyOptions: {
-            audience: "https://api.example.com",
             issuer: "https://auth.example.com",
-          }
-        });
-        // ...continue
-      } catch (error) {
-        try {
-          return handleMcpErrors(
-            error,
-            "https://api.example.com",
-          );
-        } catch (error) {
-          console.error(error as unknown as string);
+            audience: "https://api.example.com",
+          },
         }
-      }
+      );
+      // ...continue
     }
     ```
   </Step>
@@ -1476,7 +1444,7 @@ The MCP endpoints moved from `/mcp` to the `/oauth2` equivalent.
 - `/oauth2/token` (previously `/mcp/token`)
 - `/oauth2/register` (previously `/mcp/register`)
 - `/mcp/get-session` removed as not oAuth2 compliant, use `/oauth2/introspect` instead
-- `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with `api.oAuth2introspectVerify`/`verifyAccessToken` and `handleMcpErrors`)
+- `/.well-known/oauth-protected-resource` removed, use the helper `mcpHandler` (or manually with the server `api.oAuth2introspectVerify` or the client `verifyAccessToken`)
 
 
 ### From [API Key](/docs/plugins/api-key)

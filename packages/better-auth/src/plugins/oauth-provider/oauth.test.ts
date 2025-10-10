@@ -7,7 +7,6 @@ import { createAuthClient } from "../../client";
 import { oauthProviderClient } from "./client";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
-import { verifyAccessToken } from "./verify";
 import { listen, type Listener } from "listhen";
 import { toNodeHandler } from "../../integrations/node";
 import { createLocalJWKSet, jwtVerify } from "jose";
@@ -1052,7 +1051,7 @@ describe("oauth - config", () => {
 			});
 
 			const client = createAuthClient({
-				plugins: [genericOAuthClient()],
+				plugins: [oauthProviderClient(), genericOAuthClient()],
 				baseURL: rpBaseUrl,
 				fetchOptions: {
 					customFetchImpl: customFetchImplRP,
@@ -1110,7 +1109,7 @@ describe("oauth - config", () => {
 			expect(tokens.data?.accessToken).toBeDefined();
 			if (publicClient && !(resource && !disableJwtPlugin)) {
 				await expect(
-					verifyAccessToken(tokens.data?.accessToken!, {
+					client.verifyAccessToken(tokens.data?.accessToken!, {
 						verifyOptions: {
 							audience: validAudience,
 							issuer: authServerUrl,
@@ -1119,20 +1118,39 @@ describe("oauth - config", () => {
 					}),
 				).rejects.toThrowError();
 			} else {
-				await verifyAccessToken(tokens.data?.accessToken!, {
-					verifyOptions: {
-						audience: validAudience,
-						issuer: authServerUrl,
+				const payload = await client.verifyAccessToken(
+					tokens.data?.accessToken!,
+					{
+						verifyOptions: {
+							audience: validAudience,
+							issuer: authServerUrl,
+						},
+						jwksUrl: disableJwtPlugin ? undefined : `${authServerUrl}/jwks`,
+						remoteVerify: publicClient
+							? undefined
+							: {
+									introspectUrl: `${authServerUrl}/oauth2/introspect`,
+									clientId: createdClient?.client_id!,
+									clientSecret: createdClient?.client_secret!,
+								},
 					},
-					jwksUrl: disableJwtPlugin ? undefined : `${authServerUrl}/jwks`,
-					remoteVerify: publicClient
-						? undefined
-						: {
-								introspectUrl: `${authServerUrl}/oauth2/introspect`,
-								clientId: createdClient?.client_id!,
-								clientSecret: createdClient?.client_secret!,
-							},
+				);
+				expect(payload).toMatchObject({
+					sub: expect.any(String),
+					iss: authServerUrl,
+					scope: ["openid", "profile", "email"].join(" "),
+					client_id: createdClient.client_id,
+					iat: expect.any(Number),
+					exp: expect.any(Number),
 				});
+				if (resource && !(resource && disableJwtPlugin)) {
+					expect(payload?.aud).toStrictEqual([
+						validAudience,
+						`${authServerUrl}/oauth2/userinfo`,
+					]);
+				} else {
+					expect(payload?.aud).toBeUndefined();
+				}
 			}
 
 			// Check id token tokens

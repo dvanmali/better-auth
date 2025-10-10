@@ -9,6 +9,8 @@ import {
 	type ProtectedHeaderParameters,
 } from "jose";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { logger } from "@better-auth/core/env";
+import { betterFetch } from "@better-fetch/fetch";
 import { getJwtPlugin } from "./utils";
 import { APIError } from "better-call";
 import type { OAuthOptions } from "./types";
@@ -49,13 +51,16 @@ export async function verifyJwsAccessToken(
 	if (!jwks || !jwks.keys.find((jwk) => jwk.kid === jwtHeaders.kid)) {
 		jwks =
 			typeof opts.jwksFetch === "string"
-				? await fetch(opts.jwksFetch, {
+				? await betterFetch<JSONWebKeySet>(opts.jwksFetch, {
 						headers: {
 							Accept: "application/json",
 						},
 					}).then(async (res) => {
-						if (!res.ok) throw new Error(`Jwks error: status ${res.status}`);
-						return (await res.json()) as JSONWebKeySet | undefined;
+						if (res.error)
+							throw new Error(
+								`Jwks failed: ${res.error.message ?? res.error.statusText}`,
+							);
+						return res.data;
 					})
 				: await opts.jwksFetch();
 		if (!jwks) throw new Error("No jwks found");
@@ -68,6 +73,11 @@ export async function verifyJwsAccessToken(
 			createLocalJWKSet(jwks),
 			opts.verifyOptions,
 		);
+		// Return the JWT payload in introspection format
+		// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
+		if (jwt.payload.azp) {
+			jwt.payload.client_id = jwt.payload.azp;
+		}
 		return jwt.payload;
 	} catch (error) {
 		if (error instanceof Error) throw error;
@@ -94,8 +104,6 @@ interface VerifyAccessTokenRemote {
  * Performs local verification of an access token for your API.
  *
  * Can also be configured for remote verification.
- *
- * @external
  */
 export async function verifyAccessToken(
 	token: string,
@@ -134,7 +142,11 @@ export async function verifyAccessToken(
 
 	// Remote verify
 	if (opts?.remoteVerify) {
-		const introspect = await fetch(opts.remoteVerify.introspectUrl, {
+		const { data: introspect, error: introspectError } = await betterFetch<
+			JWTPayload & {
+				active: boolean;
+			}
+		>(opts.remoteVerify.introspectUrl, {
 			method: "POST",
 			headers: {
 				Accept: "application/json",
@@ -146,15 +158,12 @@ export async function verifyAccessToken(
 				token,
 				token_type_hint: "access_token",
 			}).toString(),
-		}).then(async (res) => {
-			if (!res.ok) throw new Error(`Introspect error: status ${res.status}`);
-			return (await res.json()) as
-				| (JWTPayload & {
-						active: boolean;
-				  })
-				| undefined;
 		});
-		if (!introspect || !introspect?.active) throw new Error("inactive");
+		if (introspectError)
+			logger.error(
+				`Jwks failed: ${introspectError.message ?? introspectError.statusText}`,
+			);
+		if (!introspect || !introspect?.active) throw new APIError("FORBIDDEN");
 		// Verifies payload using verify options (token valid through introspect)
 		try {
 			const unsecuredJwt = new UnsecuredJWT(introspect).encode();
@@ -168,7 +177,10 @@ export async function verifyAccessToken(
 		}
 	}
 
-	if (!payload) throw new Error("missing payload");
+	if (!payload)
+		throw new APIError("UNAUTHORIZED", {
+			message: `no token payload`,
+		});
 
 	// Check scopes if provided
 	if (opts.scopes) {
