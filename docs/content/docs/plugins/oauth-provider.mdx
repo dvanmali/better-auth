@@ -951,6 +951,48 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
   <Step>
     ### Handle MCP Errors for your API
 
+    - Using the client `verifyAccessToken` function
+
+    ```ts title="api/[endpoint].ts"
+    import { authClient } from "@/lib/client";
+
+    export const GET = async (req: Request) => {
+      const authorization = req.headers?.get("authorization") ?? undefined;
+      const accessToken = authorization?.startsWith("Bearer ")
+        ? authorization.replace("Bearer ", "")
+        : authorization;
+      const payload = await client.verifyAccessToken(
+        accessToken, {
+          verifyOptions: {
+            issuer: "https://auth.example.com",
+            audience: "https://api.example.com",
+          },
+        }
+      );
+      // ...continue
+    }
+    ```
+
+    - With auth available, use the client `verifyAccessToken` function to automatically determine endpoints
+
+    ```ts title="api/[endpoint].ts"
+    import { auth } from "@/lib/auth";
+    import { authClient } from "@/lib/client";
+
+    export const GET = async (req: Request) => {
+      const authorization = req.headers?.get("authorization") ?? undefined;
+      const accessToken = authorization?.startsWith("Bearer ")
+        ? authorization.replace("Bearer ", "")
+        : authorization;
+      const payload = await authClient.verifyAccessToken(
+        accessToken,
+        undefined,
+        auth,
+      );
+      // ...continue
+    }
+    ```
+
     - Using `mcpHandler` helper
 
     ```ts title="api/[transport]/route.ts"
@@ -995,28 +1037,6 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
     });
 
     export { handler as GET, handler as POST, handler as DELETE };
-    ```
-
-    - Using the client `verifyAccessToken` function
-
-    ```ts
-    import { authClient } from "./client";
-
-    export const GET = async (req: Request) => {
-      const authorization = req.headers?.get("authorization") ?? undefined;
-      const accessToken = authorization?.startsWith("Bearer ")
-        ? authorization.replace("Bearer ", "")
-        : authorization;
-      const payload = await client.verifyAccessToken(
-        accessToken, {
-          verifyOptions: {
-            issuer: "https://auth.example.com",
-            audience: "https://api.example.com",
-          },
-        }
-      );
-      // ...continue
-    }
     ```
   </Step>
 </Steps>

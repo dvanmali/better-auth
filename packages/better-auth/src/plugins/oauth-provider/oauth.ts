@@ -26,7 +26,6 @@ import { revokeEndpoint } from "./revoke";
 import { BetterAuthError } from "@better-auth/core/error";
 import { logger } from "@better-auth/core/env";
 import type { ResourceServerMetadata } from "../../oauth-2.1/types";
-import { introspectVerifyEndpoint } from "./verify";
 import * as oauthClientEndpoints from "./oauthClient";
 
 /**
@@ -769,29 +768,6 @@ export const oauthProvider = (options: OAuthOptions) => {
 				},
 				async (ctx) => {
 					return introspectEndpoint(ctx, opts);
-				},
-			),
-			oauth2IntrospectVerify: createAuthEndpoint(
-				"/oauth2/introspect/verify",
-				{
-					method: "POST",
-					body: z
-						.object({
-							token: z.string().optional(),
-							options: z.object().optional(),
-						})
-						.optional(),
-					metadata: {
-						SERVER_ONLY: true,
-					},
-				},
-				async (ctx) => {
-					return introspectVerifyEndpoint(
-						ctx,
-						opts,
-						ctx.body?.token,
-						ctx.body?.options,
-					);
 				},
 			),
 			oauth2Revoke: createAuthEndpoint(

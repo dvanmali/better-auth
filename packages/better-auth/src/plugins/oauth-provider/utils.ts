@@ -9,12 +9,13 @@ import type { OAuthOptions, StoreTokenType } from "./types";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { databaseToSchema, type DatabaseClient } from "./register";
 import { timingSafeEqual } from "crypto";
+import type { Auth } from "../../auth";
 
 /**
  * Gets the oAuth Provider Plugin
  * @internal
  */
-export const getOAuthProviderPlugin = (ctx: AuthContext) => {
+export const getOAuthProviderPlugin = (ctx: AuthContext | Auth) => {
 	return ctx.options.plugins?.find(
 		(plugin) => plugin.id === "oauthProvider",
 	) as ReturnType<typeof oauthProvider>;
@@ -24,7 +25,7 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
  * Gets the JWT Plugin
  * @internal
  */
-export const getJwtPlugin = (ctx: AuthContext) => {
+export const getJwtPlugin = (ctx: AuthContext | Auth) => {
 	const plugin = ctx.options.plugins?.find((plugin) => plugin.id === "jwt");
 	if (!plugin) {
 		throw new BetterAuthError("jwt_config", "jwt plugin not found");

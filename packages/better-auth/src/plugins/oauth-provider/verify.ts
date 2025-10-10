@@ -8,12 +8,9 @@ import {
 	type JWTVerifyOptions,
 	type ProtectedHeaderParameters,
 } from "jose";
-import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { betterFetch } from "@better-fetch/fetch";
-import { getJwtPlugin } from "./utils";
 import { APIError } from "better-call";
-import type { OAuthOptions } from "./types";
 
 /** Last fetched jwks */
 // Never export (used locally in ONLY verifyJwsAccessToken)
@@ -85,7 +82,7 @@ export async function verifyJwsAccessToken(
 	}
 }
 
-interface VerifyAccessTokenRemote {
+export interface VerifyAccessTokenRemote {
 	/** Full url of the introspect endpoint. Should end with `/oauth2/introspect` */
 	introspectUrl: string;
 	/** Client Secret */
@@ -195,67 +192,4 @@ export async function verifyAccessToken(
 	}
 
 	return payload;
-}
-
-/**
- * Performs verification of an access token for your API
- * using the oAuth configuration values.
- *
- * Utilizes `verifyAccessToken` under the hood.
- */
-export async function introspectVerifyEndpoint(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions,
-	token?: string,
-	verifyOpts?: {
-		/** Verify options */
-		verifyOptions?: JWTVerifyOptions;
-		/** Scopes to additionally verify. Token must include all but not exact. */
-		scopes?: string[];
-		/** If provided, can verify a token remotely */
-		remoteVerify?: Omit<VerifyAccessTokenRemote, "introspectUrl">;
-	},
-) {
-	const jwtPlugin = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context);
-	const baseURL = ctx.context.baseURL;
-
-	if (!token) {
-		throw new APIError("UNAUTHORIZED", {
-			message: "missing access token",
-		});
-	}
-
-	try {
-		const accessToken = await verifyAccessToken(token, {
-			verifyOptions: {
-				audience: jwtPlugin?.options?.jwt?.audience ?? baseURL,
-				issuer: jwtPlugin?.options?.jwt?.issuer ?? baseURL,
-				...verifyOpts?.verifyOptions,
-			},
-			scopes: verifyOpts?.scopes,
-			jwksUrl: opts.disableJwtPlugin
-				? undefined
-				: (jwtPlugin?.options?.jwks?.remoteUrl ?? `${baseURL}/jwks`),
-			remoteVerify: verifyOpts?.remoteVerify
-				? {
-						...verifyOpts.remoteVerify,
-						introspectUrl: `${baseURL}/oauth2/introspect`,
-					}
-				: undefined,
-		});
-		return accessToken;
-	} catch (error) {
-		if (error instanceof APIError) {
-			throw error;
-		} else if (error instanceof Error) {
-			throw new APIError("UNAUTHORIZED", {
-				message: error.message,
-			});
-		}
-		throw new APIError("UNAUTHORIZED", {
-			message: error as unknown as string,
-		});
-	}
 }
