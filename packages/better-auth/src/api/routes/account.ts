@@ -519,8 +519,9 @@ export const getAccessToken = createAuthEndpoint(
 			value: providerId,
 		});
 		if (!provider) {
-			throw new APIError("BAD_REQUEST", {
-				message: `Provider ${providerId} not found.`,
+			throw APIError.from("BAD_REQUEST", {
+				message: `Provider ${providerId} is not supported.`,
+				code: "PROVIDER_NOT_SUPPORTED",
 			});
 		}
 		const accountData = await getAccountCookie(ctx);
@@ -687,8 +688,8 @@ export const refreshToken = createAuthEndpoint(
 		});
 		if (!provider) {
 			throw APIError.from("BAD_REQUEST", {
-				message: `Provider ${providerId} not found.`,
-				code: "PROVIDER_NOT_FOUND",
+				message: `Provider ${providerId} is not supported.`,
+				code: "PROVIDER_NOT_SUPPORTED",
 			});
 		}
 		if (!provider.refreshAccessToken) {
