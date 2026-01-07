@@ -1,9 +1,10 @@
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
 import { publicSessionMiddleware } from "../middleware";
-import { createOAuthClientEndpoint } from "../register";
+import { createOAuthClientEndpoint, schemaToOAuth } from "../register";
 import type { OAuthOptions, Scope } from "../types";
-import { SafeUrlSchema } from "../types/zod";
+import { HttpsOnlyUrlSchema, SafeUrlSchema } from "../types/zod";
+import { createCimdClient } from "../utils/cimd";
 import {
 	deleteClientEndpoint,
 	getClientEndpoint,
@@ -19,6 +20,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 		{
 			method: "POST",
 			body: z.object({
+				client_id: HttpsOnlyUrlSchema.optional(),
 				redirect_uris: z.array(SafeUrlSchema).min(1),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
@@ -219,6 +221,16 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
+			if (
+				opts.cimd?.enable &&
+				ctx.body.client_id &&
+				URL.canParse(ctx.body.client_id) &&
+				URL.parse(ctx.body.client_id)?.protocol === "https:"
+			) {
+				const url = URL.parse(ctx.body.client_id)!;
+				const schema = await createCimdClient(ctx, url, opts);
+				return schemaToOAuth(schema);
+			}
 			return createOAuthClientEndpoint(ctx, opts, {
 				isRegister: false,
 			});
@@ -232,6 +244,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			method: "POST",
 			use: [sessionMiddleware],
 			body: z.object({
+				client_id: HttpsOnlyUrlSchema.optional(),
 				redirect_uris: z.array(SafeUrlSchema).min(1),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
@@ -415,6 +428,16 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
+			if (
+				opts.cimd?.enable &&
+				ctx.body.client_id &&
+				URL.canParse(ctx.body.client_id) &&
+				URL.parse(ctx.body.client_id)?.protocol === "https:"
+			) {
+				const url = URL.parse(ctx.body.client_id)!;
+				const schema = await createCimdClient(ctx, url, opts);
+				return schemaToOAuth(schema);
+			}
 			return createOAuthClientEndpoint(ctx, opts, {
 				isRegister: false,
 			});
