@@ -1042,7 +1042,7 @@ async function handleRefreshTokenGrant(
 		user,
 		grantType: "refresh_token",
 		referenceId: refreshToken.referenceId,
-		sessionId: refreshToken.sessionId ?? undefined,
+		sessionId: refreshToken.sessionId,
 		refreshToken,
 		authTime,
 	});
